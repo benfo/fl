@@ -256,6 +256,62 @@ func (c *Client) boardLists(boardID string) ([]*tracker.Transition, error) {
 	return transitions, nil
 }
 
+func (c *Client) AddSubtask(cardKey, summary string) (*tracker.Item, error) {
+	// Get existing checklists on the card.
+	var checklists []struct {
+		ID string `json:"id"`
+	}
+	resp, err := c.http.R().
+		SetResult(&checklists).
+		Get(fmt.Sprintf("/cards/%s/checklists", cardKey))
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	// Use the first existing checklist, or create one named "Tasks".
+	var checklistID string
+	if len(checklists) > 0 {
+		checklistID = checklists[0].ID
+	} else {
+		var cl struct {
+			ID string `json:"id"`
+		}
+		resp, err = c.http.R().
+			SetResult(&cl).
+			SetBody(map[string]string{"idCard": cardKey, "name": "Tasks"}).
+			SetHeader("Content-Type", "application/json").
+			Post("/checklists")
+		if err != nil {
+			return nil, err
+		}
+		if resp.IsError() {
+			return nil, fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+		}
+		checklistID = cl.ID
+	}
+
+	// Add the checklist item.
+	resp, err = c.http.R().
+		SetQueryParam("name", summary).
+		Post(fmt.Sprintf("/checklists/%s/checkItems", checklistID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	// Return the card key as item key — checklist items don't have independent URLs.
+	return &tracker.Item{
+		Key:     cardKey,
+		Summary: summary,
+		Type:    "checklist item",
+	}, nil
+}
+
 func (c *Client) CreateDests() ([]*tracker.CreateDest, error) {
 	boardIDs := config.TrelloBoardIDs()
 

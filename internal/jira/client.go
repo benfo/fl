@@ -280,6 +280,57 @@ func (c *Client) CreateItem(destID, summary string) (*tracker.Item, error) {
 	}, nil
 }
 
+func (c *Client) AddSubtask(parentKey, summary string) (*tracker.Item, error) {
+	// Derive project key from issue key, e.g. "PROJ-123" → "PROJ".
+	projectKey := strings.SplitN(parentKey, "-", 2)[0]
+
+	// Find the subtask issue type for this project.
+	types, err := c.projectIssueTypes(projectKey)
+	if err != nil {
+		return nil, fmt.Errorf("fetching issue types for %s: %w", projectKey, err)
+	}
+	var subtaskTypeName string
+	for _, t := range types {
+		if t.Subtask {
+			subtaskTypeName = t.Name
+			break
+		}
+	}
+	if subtaskTypeName == "" {
+		return nil, fmt.Errorf("project %s does not have a subtask issue type — subtasks may not be enabled", projectKey)
+	}
+
+	body := map[string]any{
+		"fields": map[string]any{
+			"project":   map[string]string{"key": projectKey},
+			"parent":    map[string]string{"key": parentKey},
+			"issuetype": map[string]string{"name": subtaskTypeName},
+			"summary":   summary,
+		},
+	}
+
+	var result struct {
+		Key string `json:"key"`
+	}
+	resp, err := c.http.R().
+		SetBody(body).
+		SetResult(&result).
+		Post("/rest/api/3/issue")
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	return &tracker.Item{
+		Key:     result.Key,
+		Summary: summary,
+		Type:    subtaskTypeName,
+		Status:  "To Do",
+	}, nil
+}
+
 func buildMyTicketsJQL(projects []string) string {
 	base := `assignee = currentUser() AND statusCategory in ("In Progress", "To Do")`
 

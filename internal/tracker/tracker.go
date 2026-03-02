@@ -35,6 +35,11 @@ type Client interface {
 	CreateDests() ([]*CreateDest, error)
 	// CreateItem creates a new item at dest with the given summary and returns it.
 	CreateItem(destID, summary string) (*Item, error)
+	// AddSubtask adds a subtask to the given item.
+	// For Jira this creates a child issue; for Trello it adds a checklist item.
+	// Returns the created item. When the provider uses checklist items rather
+	// than independent issues (Trello), item.Key equals parentKey.
+	AddSubtask(parentKey, summary string) (*Item, error)
 	// KeyPattern returns a regex for extracting item keys from git branch names.
 	KeyPattern() *regexp.Regexp
 }
