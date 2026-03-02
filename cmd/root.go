@@ -37,4 +37,5 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(subtaskCmd)
+	rootCmd.AddCommand(prCmd)
 }
