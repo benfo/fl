@@ -219,6 +219,130 @@ func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
 	return items, nil
 }
 
+func (c *Client) UnassignedItems() ([]*tracker.Item, error) {
+	boardIDs := config.TrelloBoardIDs()
+	if len(boardIDs) == 0 {
+		var boards []struct {
+			ID string `json:"id"`
+		}
+		resp, err := c.http.R().
+			SetResult(&boards).
+			SetQueryParam("filter", "open").
+			SetQueryParam("fields", "id").
+			Get("/members/me/boards")
+		if err != nil {
+			return nil, err
+		}
+		if resp.IsError() {
+			return nil, fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+		}
+		for _, b := range boards {
+			boardIDs = append(boardIDs, b.ID)
+		}
+	}
+
+	// Collect unique list IDs across all boards.
+	type rawCard struct {
+		ShortLink string   `json:"shortLink"`
+		Name      string   `json:"name"`
+		IdList    string   `json:"idList"`
+		IdMembers []string `json:"idMembers"`
+	}
+
+	listIDs := map[string]struct{}{}
+	var allCards []rawCard
+
+	for _, boardID := range boardIDs {
+		var cards []rawCard
+		resp, err := c.http.R().
+			SetResult(&cards).
+			SetQueryParam("filter", "open").
+			SetQueryParam("fields", "name,shortLink,idList,idMembers").
+			SetQueryParam("limit", "50").
+			Get(fmt.Sprintf("/boards/%s/cards", boardID))
+		if err != nil || resp.IsError() {
+			continue
+		}
+		for _, card := range cards {
+			if len(card.IdMembers) == 0 {
+				allCards = append(allCards, card)
+				listIDs[card.IdList] = struct{}{}
+			}
+		}
+	}
+
+	listNames := make(map[string]string, len(listIDs))
+	for id := range listIDs {
+		name, err := c.listName(id)
+		if err == nil {
+			listNames[id] = name
+		}
+	}
+
+	items := make([]*tracker.Item, 0, len(allCards))
+	for _, card := range allCards {
+		url, _ := c.ItemURL(card.ShortLink)
+		items = append(items, &tracker.Item{
+			Key:     card.ShortLink,
+			Summary: card.Name,
+			Status:  listNames[card.IdList],
+			Type:    "card",
+			URL:     url,
+		})
+	}
+	return items, nil
+}
+
+func (c *Client) SearchItems(query string) ([]*tracker.Item, error) {
+	var result struct {
+		Cards []struct {
+			ShortLink string `json:"shortLink"`
+			Name      string `json:"name"`
+			IdList    string `json:"idList"`
+		} `json:"cards"`
+	}
+
+	resp, err := c.http.R().
+		SetResult(&result).
+		SetQueryParam("query", query).
+		SetQueryParam("modelTypes", "cards").
+		SetQueryParam("cards_limit", "20").
+		SetQueryParam("card_fields", "name,shortLink,idList").
+		Get("/search")
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	// Resolve unique list IDs.
+	listIDs := map[string]struct{}{}
+	for _, card := range result.Cards {
+		listIDs[card.IdList] = struct{}{}
+	}
+	listNames := make(map[string]string, len(listIDs))
+	for id := range listIDs {
+		name, err := c.listName(id)
+		if err == nil {
+			listNames[id] = name
+		}
+	}
+
+	items := make([]*tracker.Item, 0, len(result.Cards))
+	for _, card := range result.Cards {
+		url, _ := c.ItemURL(card.ShortLink)
+		items = append(items, &tracker.Item{
+			Key:     card.ShortLink,
+			Summary: card.Name,
+			Status:  listNames[card.IdList],
+			Type:    "card",
+			URL:     url,
+		})
+	}
+	return items, nil
+}
+
 // listName fetches the name of a Trello list by its ID.
 func (c *Client) listName(listID string) (string, error) {
 	var list struct {

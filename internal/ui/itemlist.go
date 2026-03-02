@@ -6,6 +6,7 @@ import (
 
 	"github.com/benfo/fl/internal/git"
 	"github.com/benfo/fl/internal/tracker"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -57,6 +58,16 @@ type gitContextMsg struct {
 	branches   map[string]string
 }
 
+// ── list view modes ───────────────────────────────────────────────────────────
+
+type listViewMode int
+
+const (
+	listViewMine       listViewMode = iota
+	listViewUnassigned listViewMode = iota
+	listViewSearch     listViewMode = iota
+)
+
 // ── list item ────────────────────────────────────────────────────────────────
 
 type listItem struct {
@@ -80,13 +91,23 @@ type itemListScreen struct {
 	width       int
 	height      int
 	showHelp    bool
+
+	listView    listViewMode
+	searchInput textinput.Model
+	searchEntry bool   // true while "/" is active
+	searchQuery string // last committed query
 }
 
 // NewItemListScreen creates the item list screen.
 func NewItemListScreen(client tracker.Client) *itemListScreen {
+	si := textinput.New()
+	si.Placeholder = "Search…"
+	si.CharLimit = 200
+
 	return &itemListScreen{
-		client:  client,
-		loading: true,
+		client:      client,
+		loading:     true,
+		searchInput: si,
 	}
 }
 
@@ -96,8 +117,19 @@ func (m itemListScreen) Init() tea.Cmd {
 
 func (m itemListScreen) loadItemsCmd() tea.Cmd {
 	client := m.client
+	view := m.listView
+	query := m.searchQuery
 	return func() tea.Msg {
-		items, err := client.MyOpenItems()
+		var items []*tracker.Item
+		var err error
+		switch view {
+		case listViewMine:
+			items, err = client.MyOpenItems()
+		case listViewUnassigned:
+			items, err = client.UnassignedItems()
+		case listViewSearch:
+			items, err = client.SearchItems(query)
+		}
 		return itemsLoadedMsg{items: items, err: err}
 	}
 }
@@ -131,10 +163,38 @@ func (m itemListScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focusCurrentItem()
 
 	case itemUpdatedMsg:
-		// Refresh git context when an item's branch may have changed.
-		return m, m.loadGitContextCmd()
+		// Refresh the list and git context after an item change.
+		m.loading = true
+		m.rawItems = nil
+		return m, tea.Batch(m.loadItemsCmd(), m.loadGitContextCmd())
 
 	case tea.KeyMsg:
+		// Search entry mode — route all keys to the textinput.
+		if m.searchEntry {
+			switch msg.String() {
+			case "enter":
+				query := strings.TrimSpace(m.searchInput.Value())
+				m.searchEntry = false
+				if query != "" {
+					m.searchQuery = query
+					m.listView = listViewSearch
+					m.cursor = 0
+					m.loading = true
+					m.rawItems = nil
+					return m, m.loadItemsCmd()
+				}
+				return m, nil
+			case "esc":
+				m.searchEntry = false
+				m.searchInput.SetValue("")
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			return m, cmd
+		}
+
+		// Normal mode key handling.
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -150,6 +210,24 @@ func (m itemListScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				detail := newItemDetailScreen(item, m.client)
 				return m, func() tea.Msg { return pushScreenMsg{screen: detail} }
 			}
+		case "tab":
+			// Toggle mine ↔ unassigned.
+			if m.listView == listViewMine {
+				m.listView = listViewUnassigned
+			} else {
+				m.listView = listViewMine
+			}
+			m.cursor = 0
+			m.loading = true
+			m.rawItems = nil
+			return m, m.loadItemsCmd()
+		case "/":
+			m.searchEntry = true
+			m.searchInput.SetValue("")
+			return m, m.searchInput.Focus()
+		case "c":
+			screen := newCreateItemScreen(m.client)
+			return m, func() tea.Msg { return pushScreenMsg{screen: screen} }
 		case "r":
 			m.loading = true
 			m.rawItems = nil
@@ -203,14 +281,35 @@ func (m itemListScreen) View() string {
 	var sb strings.Builder
 
 	// Header
-	help := listHelpStyle.Render("r refresh  ? help  q quit")
-	header := listHeaderStyle.Render("fl — open items")
+	var title, helpText string
+	switch m.listView {
+	case listViewMine:
+		title = "fl — my items"
+		helpText = "tab unassigned  / search  c create  r refresh  ? help  q quit"
+	case listViewUnassigned:
+		title = "fl — unassigned"
+		helpText = "tab mine  / search  c create  r refresh  ? help  q quit"
+	case listViewSearch:
+		title = fmt.Sprintf("fl — search: %q", m.searchQuery)
+		helpText = "tab mine  / search  c create  r refresh  ? help  q quit"
+	}
+	help := listHelpStyle.Render(helpText)
+	header := listHeaderStyle.Render(title)
 	padding := width - lipgloss.Width(header) - lipgloss.Width(help)
 	if padding < 1 {
 		padding = 1
 	}
 	sb.WriteString(header + strings.Repeat(" ", padding) + help + "\n")
 	sb.WriteString(divider + "\n")
+
+	// Search entry input line.
+	if m.searchEntry {
+		si := m.searchInput
+		si.Width = width - 4
+		hint := listHelpStyle.Render("  Enter search  Esc cancel")
+		sb.WriteString("  " + si.View() + hint + "\n")
+		sb.WriteString(divider + "\n")
+	}
 
 	// Loading / error states
 	if m.loading {
@@ -222,7 +321,7 @@ func (m itemListScreen) View() string {
 		return sb.String()
 	}
 	if len(m.items) == 0 {
-		sb.WriteString(listHelpStyle.Render("  No open items.") + "\n")
+		sb.WriteString(listHelpStyle.Render("  No items.") + "\n")
 		return sb.String()
 	}
 
@@ -260,7 +359,7 @@ func (m itemListScreen) View() string {
 	// Help overlay
 	if m.showHelp {
 		sb.WriteString("\n" + divider + "\n")
-		sb.WriteString(listHelpStyle.Render("  ↑/k up  ↓/j down  enter/→ open  r refresh  q quit  ? close help") + "\n")
+		sb.WriteString(listHelpStyle.Render("  ↑/k up  ↓/j down  enter/→ open  tab toggle view  / search  c create  r refresh  q quit  ? close help") + "\n")
 	}
 
 	return sb.String()

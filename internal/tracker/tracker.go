@@ -67,6 +67,10 @@ type Client interface {
 	UpdateItem(key, summary, description string) error
 	// GetSubtasks returns the subtasks (child issues / checklist items) of an item.
 	GetSubtasks(parentKey string) ([]*Item, error)
+	// UnassignedItems returns open items not assigned to any user.
+	UnassignedItems() ([]*Item, error)
+	// SearchItems returns items matching the given query string.
+	SearchItems(query string) ([]*Item, error)
 	// KeyPattern returns a regex for extracting item keys from git branch names.
 	KeyPattern() *regexp.Regexp
 }

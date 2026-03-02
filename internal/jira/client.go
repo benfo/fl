@@ -86,8 +86,21 @@ func (c *Client) ItemURL(key string) (string, error) {
 }
 
 func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
-	jql := buildMyTicketsJQL(config.JiraProjects())
+	return c.searchIssues(buildMyTicketsJQL(config.JiraProjects()), 20)
+}
 
+func (c *Client) UnassignedItems() ([]*tracker.Item, error) {
+	jql := buildUnassignedJQL(config.JiraProjects())
+	return c.searchIssues(jql, 20)
+}
+
+func (c *Client) SearchItems(query string) ([]*tracker.Item, error) {
+	jql := buildSearchJQL(query, config.JiraProjects())
+	return c.searchIssues(jql, 20)
+}
+
+// searchIssues executes a JQL query and returns the matching items.
+func (c *Client) searchIssues(jql string, maxResults int) ([]*tracker.Item, error) {
 	var result struct {
 		Issues []struct {
 			Key    string `json:"key"`
@@ -107,7 +120,7 @@ func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
 		SetResult(&result).
 		SetBody(map[string]any{
 			"jql":        jql,
-			"maxResults": 20,
+			"maxResults": maxResults,
 			"fields":     []string{"summary", "status", "issuetype"},
 		}).
 		Post("/rest/api/3/search/jql")
@@ -539,14 +552,28 @@ func adfDoc(text string) map[string]any {
 
 func buildMyTicketsJQL(projects []string) string {
 	base := `assignee = currentUser() AND statusCategory in ("In Progress", "To Do")`
+	return appendProjectFilter(base, projects) + ` ORDER BY updated DESC`
+}
 
-	if len(projects) > 0 {
-		quoted := make([]string, len(projects))
-		for i, p := range projects {
-			quoted[i] = `"` + p + `"`
-		}
-		base += ` AND project in (` + strings.Join(quoted, ", ") + `)`
+func buildUnassignedJQL(projects []string) string {
+	base := `assignee is EMPTY AND statusCategory in ("In Progress", "To Do")`
+	return appendProjectFilter(base, projects) + ` ORDER BY updated DESC`
+}
+
+func buildSearchJQL(query string, projects []string) string {
+	// Escape double quotes inside the user query.
+	escaped := strings.ReplaceAll(query, `"`, `\"`)
+	base := `text ~ "` + escaped + `" AND statusCategory in ("In Progress", "To Do")`
+	return appendProjectFilter(base, projects) + ` ORDER BY updated DESC`
+}
+
+func appendProjectFilter(base string, projects []string) string {
+	if len(projects) == 0 {
+		return base
 	}
-
-	return base + ` ORDER BY updated DESC`
+	quoted := make([]string, len(projects))
+	for i, p := range projects {
+		quoted[i] = `"` + p + `"`
+	}
+	return base + ` AND project in (` + strings.Join(quoted, ", ") + `)`
 }
