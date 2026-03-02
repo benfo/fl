@@ -1,0 +1,36 @@
+jira:
+  host: https://yourcompany.atlassian.net
+  email: you@yourcompany.com
+  # API token is stored in the OS keychain, not here.
+  # Run `fl auth jira` to set it up.
+
+  # Optional: restrict fl today and searches to specific project keys.
+  # When omitted, all projects you have access to are included.
+  # projects:
+  #   - PROJ
+  #   - DEV
+
+branch:
+  # Available template variables: .Key .Title .Type
+  # .Type is derived from the Jira issue type: feat | fix | chore | epic
+  template: "{{.Type}}/{{.Key}}-{{.Title}}"
+
+  # More examples:
+  # template: "{{.Key}}-{{.Title}}"
+  # template: "{{.Key}}/{{.Title}}"
+
+calendar:
+  # Supported providers: google, outlook
+  providers:
+    - google
+    - outlook
+
+  # iCal feed subscriptions (managed via `fl ical add/list/remove`)
+  # Works with any calendar that exports an .ics URL:
+  # Google Calendar, Apple Calendar, Outlook, Fastmail, Proton, etc.
+  # webcal:// URLs are automatically rewritten to https://
+  ical:
+    - name: Work
+      url: https://calendar.google.com/calendar/ical/example%40gmail.com/private-xxx/basic.ics
+    - name: Personal
+      url: webcal://p06-caldav.icloud.com/published/2/xxx
