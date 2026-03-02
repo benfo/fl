@@ -203,11 +203,13 @@ func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
 		if len(boardFilter) > 0 && !boardFilter[card.IdBoard] {
 			continue
 		}
+		url, _ := c.ItemURL(card.ShortLink)
 		items = append(items, &tracker.Item{
 			Key:     card.ShortLink,
 			Summary: card.Name,
 			Status:  listNames[card.IdList],
 			Type:    "card",
+			URL:     url,
 		})
 	}
 	return items, nil

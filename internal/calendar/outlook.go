@@ -107,7 +107,7 @@ func outlookTodayEvents() ([]*Event, error) {
 	params := url.Values{}
 	params.Set("startDateTime", startOfDay(now).UTC().Format(time.RFC3339))
 	params.Set("endDateTime", endOfDay(now).UTC().Format(time.RFC3339))
-	params.Set("$select", "subject,start,end,location")
+	params.Set("$select", "subject,start,end,location,webLink")
 	params.Set("$orderby", "start/dateTime")
 	params.Set("$top", "25")
 
@@ -139,6 +139,7 @@ func outlookTodayEvents() ([]*Event, error) {
 	var result struct {
 		Value []struct {
 			Subject  string `json:"subject"`
+			WebLink  string `json:"webLink"`
 			Location struct {
 				DisplayName string `json:"displayName"`
 			} `json:"location"`
@@ -173,6 +174,7 @@ func outlookTodayEvents() ([]*Event, error) {
 			End:      end,
 			Location: item.Location.DisplayName,
 			Provider: "outlook",
+			URL:      item.WebLink,
 		})
 	}
 	return events, nil

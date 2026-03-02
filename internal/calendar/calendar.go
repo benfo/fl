@@ -12,6 +12,7 @@ type Event struct {
 	AllDay   bool
 	Location string
 	Provider string // "google" | "outlook" | <ical feed name>
+	URL      string `json:"url,omitempty"` // web URL to open the event; may be empty
 }
 
 // TodayEvents fetches today's events from all configured calendar providers.

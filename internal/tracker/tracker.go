@@ -24,6 +24,7 @@ type Item struct {
 	Summary string
 	Status  string
 	Type    string
+	URL     string // web URL to open the item; may be empty
 }
 
 // Transition is a state the item can move to (Jira status, Trello list).

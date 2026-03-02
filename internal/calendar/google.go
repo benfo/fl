@@ -130,6 +130,7 @@ func googleTodayEvents() ([]*Event, error) {
 		Items []struct {
 			Summary  string `json:"summary"`
 			Location string `json:"location"`
+			HtmlLink string `json:"htmlLink"`
 			Start    struct {
 				DateTime string `json:"dateTime"`
 				Date     string `json:"date"`
@@ -161,6 +162,7 @@ func googleTodayEvents() ([]*Event, error) {
 			End:      end,
 			Location: item.Location,
 			Provider: "google",
+			URL:      item.HtmlLink,
 		})
 	}
 	return events, nil

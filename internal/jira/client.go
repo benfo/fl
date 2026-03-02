@@ -116,11 +116,13 @@ func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
 
 	items := make([]*tracker.Item, 0, len(result.Issues))
 	for _, issue := range result.Issues {
+		url, _ := c.ItemURL(issue.Key)
 		items = append(items, &tracker.Item{
 			Key:     issue.Key,
 			Summary: issue.Fields.Summary,
 			Status:  issue.Fields.Status.Name,
 			Type:    issue.Fields.IssueType.Name,
+			URL:     url,
 		})
 	}
 	return items, nil

@@ -60,7 +60,7 @@ func renderItems(items []*tracker.Item) string {
 	sb.WriteString("\n")
 
 	for _, t := range items {
-		key := ticketKeyStyle.Render(t.Key)
+		key := hyperlink(t.URL, ticketKeyStyle.Render(t.Key))
 		status := statusStyle.Render(fmt.Sprintf("[%s]", t.Status))
 		summary := truncate(t.Summary, 60)
 		sb.WriteString(fmt.Sprintf("  %s%s  %s\n", key, status, summary))
@@ -86,7 +86,7 @@ func renderEvents(events []*calendar.Event) string {
 		}
 		timeStr := eventTimeStyle.Render(label)
 		provider := dimStyle.Render(fmt.Sprintf("(%s)", e.Provider))
-		title := truncate(e.Title, 55)
+		title := hyperlink(e.URL, truncate(e.Title, 55))
 		sb.WriteString(fmt.Sprintf("  %s %s %s\n", timeStr, title, provider))
 	}
 	return sb.String()
@@ -97,4 +97,14 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-1] + "…"
+}
+
+// hyperlink wraps text in an OSC 8 terminal hyperlink when url is non-empty.
+// Most modern terminals (Windows Terminal, iTerm2, GNOME Terminal, Kitty, etc.)
+// render this as a clickable link; unsupported terminals display the text as-is.
+func hyperlink(url, text string) string {
+	if url == "" {
+		return text
+	}
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
 }

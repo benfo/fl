@@ -164,6 +164,7 @@ func mapEvent(e gocal.Event, feedName string) *Event {
 		AllDay:   allDay,
 		Location: e.Location,
 		Provider: feedName,
+		URL:      e.URL,
 	}
 }
 
