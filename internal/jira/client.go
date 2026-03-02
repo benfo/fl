@@ -49,8 +49,9 @@ func (c *Client) GetItem(key string) (*tracker.Item, error) {
 	var result struct {
 		Key    string `json:"key"`
 		Fields struct {
-			Summary string `json:"summary"`
-			Status  struct {
+			Summary     string         `json:"summary"`
+			Description map[string]any `json:"description"`
+			Status      struct {
 				Name string `json:"name"`
 			} `json:"status"`
 			IssueType struct {
@@ -69,11 +70,14 @@ func (c *Client) GetItem(key string) (*tracker.Item, error) {
 		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
 	}
 
+	url, _ := c.ItemURL(result.Key)
 	return &tracker.Item{
-		Key:     result.Key,
-		Summary: result.Fields.Summary,
-		Status:  result.Fields.Status.Name,
-		Type:    result.Fields.IssueType.Name,
+		Key:         result.Key,
+		Summary:     result.Fields.Summary,
+		Status:      result.Fields.Status.Name,
+		Type:        result.Fields.IssueType.Name,
+		URL:         url,
+		Description: extractADFText(result.Fields.Description),
 	}, nil
 }
 
@@ -402,6 +406,118 @@ func (c *Client) issueParent(key string) (*tracker.Item, error) {
 		Key:     result.Fields.Parent.Key,
 		Summary: result.Fields.Parent.Fields.Summary,
 	}, nil
+}
+
+func (c *Client) UpdateItem(key, summary, description string) error {
+	fields := map[string]any{}
+	if summary != "" {
+		fields["summary"] = summary
+	}
+	if description != "" {
+		fields["description"] = adfDoc(description)
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+
+	resp, err := c.http.R().
+		SetBody(map[string]any{"fields": fields}).
+		Put(fmt.Sprintf("/rest/api/3/issue/%s", key))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
+func (c *Client) GetSubtasks(parentKey string) ([]*tracker.Item, error) {
+	jql := fmt.Sprintf(`parent = %s ORDER BY created ASC`, parentKey)
+
+	var result struct {
+		Issues []struct {
+			Key    string `json:"key"`
+			Fields struct {
+				Summary string `json:"summary"`
+				Status  struct {
+					Name string `json:"name"`
+				} `json:"status"`
+				IssueType struct {
+					Name string `json:"name"`
+				} `json:"issuetype"`
+			} `json:"fields"`
+		} `json:"issues"`
+	}
+
+	resp, err := c.http.R().
+		SetResult(&result).
+		SetBody(map[string]any{
+			"jql":        jql,
+			"maxResults": 50,
+			"fields":     []string{"summary", "status", "issuetype"},
+		}).
+		Post("/rest/api/3/search/jql")
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	items := make([]*tracker.Item, 0, len(result.Issues))
+	for _, issue := range result.Issues {
+		url, _ := c.ItemURL(issue.Key)
+		items = append(items, &tracker.Item{
+			Key:     issue.Key,
+			Summary: issue.Fields.Summary,
+			Status:  issue.Fields.Status.Name,
+			Type:    issue.Fields.IssueType.Name,
+			URL:     url,
+		})
+	}
+	return items, nil
+}
+
+// extractADFText converts an Atlassian Document Format node to plain text.
+func extractADFText(doc map[string]any) string {
+	if doc == nil {
+		return ""
+	}
+	var sb strings.Builder
+	walkADF(&sb, doc)
+	return strings.TrimSpace(sb.String())
+}
+
+func walkADF(sb *strings.Builder, node map[string]any) {
+	t, _ := node["type"].(string)
+	switch t {
+	case "text":
+		if text, ok := node["text"].(string); ok {
+			sb.WriteString(text)
+		}
+		return
+	case "hardBreak":
+		sb.WriteString("\n")
+		return
+	}
+
+	content, _ := node["content"].([]interface{})
+	for i, child := range content {
+		childMap, ok := child.(map[string]any)
+		if !ok {
+			continue
+		}
+		walkADF(sb, childMap)
+		// add newline after block elements (but not after the last one)
+		if i < len(content)-1 {
+			ct, _ := childMap["type"].(string)
+			switch ct {
+			case "paragraph", "heading", "codeBlock", "bulletList", "orderedList", "blockquote":
+				sb.WriteString("\n")
+			}
+		}
+	}
 }
 
 // adfDoc wraps plain text in Atlassian Document Format (ADF), which Jira

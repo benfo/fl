@@ -20,11 +20,12 @@ func (e *ErrIsSubtask) Error() string {
 
 // Item is a generic work item (Jira issue, Trello card, etc.).
 type Item struct {
-	Key     string
-	Summary string
-	Status  string
-	Type    string
-	URL     string // web URL to open the item; may be empty
+	Key         string
+	Summary     string
+	Status      string
+	Type        string
+	URL         string // web URL to open the item; may be empty
+	Description string // plain-text description; may be empty
 }
 
 // Transition is a state the item can move to (Jira status, Trello list).
@@ -61,6 +62,11 @@ type Client interface {
 	// Returns the created item. When the provider uses checklist items rather
 	// than independent issues (Trello), item.Key equals parentKey.
 	AddSubtask(parentKey, summary, description string) (*Item, error)
+	// UpdateItem updates the summary and/or description of an item.
+	// Pass empty string for fields that should not be changed.
+	UpdateItem(key, summary, description string) error
+	// GetSubtasks returns the subtasks (child issues / checklist items) of an item.
+	GetSubtasks(parentKey string) ([]*Item, error)
 	// KeyPattern returns a regex for extracting item keys from git branch names.
 	KeyPattern() *regexp.Regexp
 }

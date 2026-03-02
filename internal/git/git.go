@@ -80,6 +80,41 @@ func CreateBranch(name string) error {
 	return nil
 }
 
+// CheckoutBranch switches to an existing local git branch.
+func CheckoutBranch(name string) error {
+	cmd := exec.Command("git", "checkout", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// LocalBranches returns the set of local branch names as a map (name→name).
+func LocalBranches() (map[string]string, error) {
+	out, err := exec.Command("git", "branch").Output()
+	if err != nil {
+		return map[string]string{}, nil
+	}
+	branches := make(map[string]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		name := strings.TrimSpace(strings.TrimPrefix(line, "*"))
+		if name != "" {
+			branches[name] = name
+		}
+	}
+	return branches, nil
+}
+
+// IsWorkingTreeDirty reports whether there are uncommitted changes.
+func IsWorkingTreeDirty() (bool, error) {
+	out, err := exec.Command("git", "status", "--porcelain").Output()
+	if err != nil {
+		return false, fmt.Errorf("git status failed: %w", err)
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
 func currentBranch() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {

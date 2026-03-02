@@ -14,7 +14,10 @@ var rootCmd = &cobra.Command{
 	Long: `fl keeps you in the flow.
 
 Manage Jira tickets, create branches, log notes,
-and see today's work — all without leaving the terminal.`,
+and see today's work — all without leaving the terminal.
+
+Run fl with no arguments to open the interactive TUI.`,
+	RunE: runTUI,
 }
 
 func Execute() {

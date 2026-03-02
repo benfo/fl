@@ -84,12 +84,13 @@ func (c *Client) GetItem(key string) (*tracker.Item, error) {
 	var card struct {
 		ShortLink string `json:"shortLink"`
 		Name      string `json:"name"`
+		Desc      string `json:"desc"`
 		IdList    string `json:"idList"`
 	}
 
 	resp, err := c.http.R().
 		SetResult(&card).
-		SetQueryParam("fields", "name,shortLink,idList").
+		SetQueryParam("fields", "name,shortLink,idList,desc").
 		Get(fmt.Sprintf("/cards/%s", key))
 	if err != nil {
 		return nil, err
@@ -99,12 +100,15 @@ func (c *Client) GetItem(key string) (*tracker.Item, error) {
 	}
 
 	listName, _ := c.listName(card.IdList)
+	url, _ := c.ItemURL(card.ShortLink)
 
 	return &tracker.Item{
-		Key:     card.ShortLink,
-		Summary: card.Name,
-		Status:  listName,
-		Type:    "card",
+		Key:         card.ShortLink,
+		Summary:     card.Name,
+		Status:      listName,
+		Type:        "card",
+		URL:         url,
+		Description: card.Desc,
 	}, nil
 }
 
@@ -284,6 +288,59 @@ func (c *Client) AssignToMe(cardKey string) error {
 		return fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
 	}
 	return nil
+}
+
+func (c *Client) UpdateItem(key, summary, description string) error {
+	req := c.http.R()
+	if summary != "" {
+		req = req.SetQueryParam("name", summary)
+	}
+	if description != "" {
+		req = req.SetQueryParam("desc", description)
+	}
+	if summary == "" && description == "" {
+		return nil
+	}
+	resp, err := req.Put(fmt.Sprintf("/cards/%s", key))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
+func (c *Client) GetSubtasks(cardKey string) ([]*tracker.Item, error) {
+	var checklists []struct {
+		CheckItems []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"checkItems"`
+	}
+
+	resp, err := c.http.R().
+		SetResult(&checklists).
+		Get(fmt.Sprintf("/cards/%s/checklists", cardKey))
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	var items []*tracker.Item
+	for _, cl := range checklists {
+		for _, ci := range cl.CheckItems {
+			items = append(items, &tracker.Item{
+				Key:     "", // checklist items are not drillable
+				Summary: ci.Name,
+				Status:  ci.State,
+				Type:    "checklist item",
+			})
+		}
+	}
+	return items, nil
 }
 
 func (c *Client) AddSubtask(cardKey, summary, _ string) (*tracker.Item, error) {
