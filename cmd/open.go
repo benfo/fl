@@ -4,37 +4,40 @@ import (
 	"fmt"
 
 	"github.com/benfourie/fl/internal/git"
-	"github.com/benfourie/fl/internal/jira"
 	"github.com/spf13/cobra"
 )
 
 var openCmd = &cobra.Command{
-	Use:   "open [ticket-key]",
-	Short: "Open the current Jira ticket in your browser",
-	Long: `Infers the Jira ticket key from the current git branch name
-and opens it in your default browser.
+	Use:   "open [item-key]",
+	Short: "Open the current tracker item in your browser",
+	Long: `Infers the item key from the current git branch and opens it
+in your default browser.
 
 Examples:
-  fl open            # infers ticket from current branch
-  fl open PROJ-123   # opens a specific ticket`,
+  fl open            # infers key from current branch
+  fl open PROJ-123
+  fl open abc12345   # Trello shortLink`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runOpen,
 }
 
 func runOpen(cmd *cobra.Command, args []string) error {
-	var key string
-	var err error
+	client, err := newTrackerClient()
+	if err != nil {
+		return err
+	}
 
+	var key string
 	if len(args) == 1 {
 		key = args[0]
 	} else {
-		key, err = git.TicketKeyFromBranch()
+		key, err = git.TicketKeyFromBranch(client.KeyPattern())
 		if err != nil {
-			return fmt.Errorf("could not infer ticket key from branch: %w", err)
+			return fmt.Errorf("could not infer key from branch: %w", err)
 		}
 	}
 
-	url, err := jira.TicketURL(key)
+	url, err := client.ItemURL(key)
 	if err != nil {
 		return err
 	}

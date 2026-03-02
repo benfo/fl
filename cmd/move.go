@@ -3,33 +3,33 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/benfourie/fl/internal/jira"
 	"github.com/benfourie/fl/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 var moveCmd = &cobra.Command{
-	Use:   "move [ticket-key]",
-	Short: "Move the current ticket to the next workflow step",
-	Long: `Fetches available transitions for the Jira ticket and lets you
-pick the next status. Infers ticket from the current git branch.
+	Use:   "move [item-key]",
+	Short: "Move the current item to the next workflow step",
+	Long: `Shows available transitions (Jira) or lists (Trello) and lets you
+pick where to move the item. Infers the key from the current git branch.
 
 Examples:
-  fl move             # infers ticket from branch, shows transition picker
-  fl move PROJ-123    # move a specific ticket`,
+  fl move             # infers key from branch, shows picker
+  fl move PROJ-123
+  fl move abc12345    # Trello shortLink`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runMove,
 }
 
 func runMove(cmd *cobra.Command, args []string) error {
-	key, err := resolveTicketKey(args)
+	client, err := newTrackerClient()
 	if err != nil {
 		return err
 	}
 
-	client, err := jira.NewClient()
+	key, err := resolveTicketKey(args, client)
 	if err != nil {
-		return fmt.Errorf("jira: %w", err)
+		return err
 	}
 
 	transitions, err := client.GetTransitions(key)

@@ -34,4 +34,6 @@ func init() {
 	rootCmd.AddCommand(todayCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(icalCmd)
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(createCmd)
 }

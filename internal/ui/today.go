@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/benfourie/fl/internal/calendar"
-	"github.com/benfourie/fl/internal/jira"
+	"github.com/benfourie/fl/internal/tracker"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -40,30 +40,26 @@ var (
 )
 
 // RenderToday prints the today dashboard to stdout.
-func RenderToday(tickets []*jira.Ticket, events []*calendar.Event) error {
+func RenderToday(items []*tracker.Item, events []*calendar.Event) error {
 	w := os.Stdout
 
 	fmt.Fprintln(w, headerStyle.Render("  fl — today"))
-
-	// --- Jira tickets ---
-	fmt.Fprintln(w, sectionStyle.Render(renderTickets(tickets)))
-
-	// --- Calendar events ---
+	fmt.Fprintln(w, sectionStyle.Render(renderItems(items)))
 	fmt.Fprintln(w, renderEvents(events))
 
 	return nil
 }
 
-func renderTickets(tickets []*jira.Ticket) string {
-	if len(tickets) == 0 {
-		return dimStyle.Render("No open Jira tickets.")
+func renderItems(items []*tracker.Item) string {
+	if len(items) == 0 {
+		return dimStyle.Render("No open items.")
 	}
 
 	var sb strings.Builder
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Jira"))
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Tasks"))
 	sb.WriteString("\n")
 
-	for _, t := range tickets {
+	for _, t := range items {
 		key := ticketKeyStyle.Render(t.Key)
 		status := statusStyle.Render(fmt.Sprintf("[%s]", t.Status))
 		summary := truncate(t.Summary, 60)
@@ -82,7 +78,13 @@ func renderEvents(events []*calendar.Event) string {
 	sb.WriteString("\n")
 
 	for _, e := range events {
-		timeStr := eventTimeStyle.Render(e.Start.Format("15:04"))
+		var label string
+		if e.AllDay {
+			label = "all day"
+		} else {
+			label = e.Start.Format("15:04")
+		}
+		timeStr := eventTimeStyle.Render(label)
 		provider := dimStyle.Render(fmt.Sprintf("(%s)", e.Provider))
 		title := truncate(e.Title, 55)
 		sb.WriteString(fmt.Sprintf("  %s %s %s\n", timeStr, title, provider))

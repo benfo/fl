@@ -1,3 +1,13 @@
+tracker:
+  # Supported providers: jira (default), trello
+  provider: trello
+
+  # Trello-specific options (only used when provider: trello)
+  # trello:
+  #   # Optional: restrict fl today to these board IDs
+  #   board_ids:
+  #     - <boardId>
+
 jira:
   host: https://yourcompany.atlassian.net
   email: you@yourcompany.com

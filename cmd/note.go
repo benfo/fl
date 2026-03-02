@@ -5,14 +5,13 @@ import (
 	"strings"
 
 	"github.com/benfourie/fl/internal/git"
-	"github.com/benfourie/fl/internal/jira"
 	"github.com/spf13/cobra"
 )
 
 var noteCmd = &cobra.Command{
 	Use:   "note <text>",
-	Short: "Add a comment to the current Jira ticket",
-	Long: `Adds a comment to the Jira ticket inferred from the current git branch.
+	Short: "Add a comment to the current tracker item",
+	Long: `Adds a comment to the item inferred from the current git branch.
 
 Examples:
   fl note "Fixed the null pointer, needs QA review"
@@ -22,17 +21,17 @@ Examples:
 }
 
 func runNote(cmd *cobra.Command, args []string) error {
-	key, err := git.TicketKeyFromBranch()
+	client, err := newTrackerClient()
 	if err != nil {
-		return fmt.Errorf("could not infer ticket key from branch: %w", err)
+		return err
+	}
+
+	key, err := git.TicketKeyFromBranch(client.KeyPattern())
+	if err != nil {
+		return fmt.Errorf("could not infer key from branch: %w", err)
 	}
 
 	text := strings.Join(args, " ")
-
-	client, err := jira.NewClient()
-	if err != nil {
-		return fmt.Errorf("jira: %w", err)
-	}
 
 	if err := client.AddComment(key, text); err != nil {
 		return fmt.Errorf("adding comment to %s: %w", key, err)

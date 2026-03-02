@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 	"github.com/zalando/go-keyring"
@@ -38,11 +40,56 @@ func Init() {
 			fmt.Fprintln(os.Stderr, "warning: config error:", err)
 		}
 	}
+
+	mergeRepoConfig()
+}
+
+// mergeRepoConfig looks for a .fl.yaml in the current git repo root and
+// merges it on top of the global config. Repo-level values take precedence.
+// Silently no-ops when not in a git repo or when .fl.yaml is absent.
+func mergeRepoConfig() {
+	root, err := GitRoot()
+	if err != nil {
+		return // not in a git repo
+	}
+
+	repoConfigPath := filepath.Join(root, ".fl.yaml")
+	if _, err := os.Stat(repoConfigPath); err != nil {
+		return // no repo-level config
+	}
+
+	// Use a separate Viper instance so we never alter the global write path
+	// (WriteConfigAs in auth commands must keep targeting ~/.fl/config.yaml).
+	rv := viper.New()
+	rv.SetConfigFile(repoConfigPath)
+	if err := rv.ReadInConfig(); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: repo config error:", err)
+		return
+	}
+
+	if err := viper.MergeConfigMap(rv.AllSettings()); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: merging repo config:", err)
+	}
+}
+
+// GitRoot returns the root directory of the current git repository.
+func GitRoot() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func setDefaults() {
+	viper.SetDefault("tracker.provider", "jira")
 	viper.SetDefault("branch.template", "{{.Type}}/{{.Key}}-{{.Title}}")
 	viper.SetDefault("calendar.providers", []string{})
+}
+
+// TrackerProvider returns the configured tracker backend ("jira" or "trello").
+func TrackerProvider() string {
+	return viper.GetString("tracker.provider")
 }
 
 // JiraHost returns the configured Jira base URL.

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/benfourie/fl/internal/jira"
+	"github.com/benfourie/fl/internal/tracker"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -19,11 +19,17 @@ var (
 			Foreground(lipgloss.Color("252"))
 )
 
+// pickerModel is a generic bubbletea list picker that works with any []string.
 type pickerModel struct {
-	items    []*jira.Transition
+	prompt   string
+	options  []string
 	cursor   int
-	chosen   *jira.Transition
+	chosen   int // -1 = cancelled
 	quitting bool
+}
+
+func newPickerModel(prompt string, options []string) pickerModel {
+	return pickerModel{prompt: prompt, options: options, chosen: -1}
 }
 
 func (m pickerModel) Init() tea.Cmd { return nil }
@@ -40,11 +46,11 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.items)-1 {
+			if m.cursor < len(m.options)-1 {
 				m.cursor++
 			}
 		case "enter":
-			m.chosen = m.items[m.cursor]
+			m.chosen = m.cursor
 			return m, tea.Quit
 		}
 	}
@@ -57,51 +63,100 @@ func (m pickerModel) View() string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(headerStyle.Render("Move ticket to:"))
+	sb.WriteString(headerStyle.Render(m.prompt))
 	sb.WriteString("\n\n")
 
-	for i, t := range m.items {
+	for i, opt := range m.options {
 		cursor := "  "
 		style := normalStyle
 		if i == m.cursor {
 			cursor = "▶ "
 			style = selectedStyle
 		}
-		sb.WriteString(fmt.Sprintf("%s%s\n", cursor, style.Render(t.Name)))
+		sb.WriteString(fmt.Sprintf("%s%s\n", cursor, style.Render(opt)))
 	}
 
 	sb.WriteString(dimStyle.Render("\n↑/↓ navigate  enter select  esc cancel"))
 	return sb.String()
 }
 
-// PickTransition shows an interactive list and returns the chosen transition.
-func PickTransition(transitions []*jira.Transition) (*jira.Transition, error) {
-	m := pickerModel{items: transitions}
-
+// pickIndex runs the TUI picker and returns the selected index, or -1 if cancelled.
+func pickIndex(prompt string, options []string) (int, error) {
+	m := newPickerModel(prompt, options)
 	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
 	result, err := p.Run()
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
-
 	final := result.(pickerModel)
-	if final.chosen == nil {
-		return nil, fmt.Errorf("no transition selected")
+	if final.chosen == -1 {
+		return -1, fmt.Errorf("cancelled")
 	}
 	return final.chosen, nil
 }
 
-// PickTransitionFallback is a plain-text fallback for non-interactive terminals.
-func PickTransitionFallback(transitions []*jira.Transition) (*jira.Transition, error) {
-	fmt.Println("Available transitions:")
-	for i, t := range transitions {
-		fmt.Printf("  %d) %s\n", i+1, t.Name)
+// pickIndexFallback is a plain-text fallback for non-interactive terminals.
+func pickIndexFallback(prompt string, options []string) (int, error) {
+	fmt.Println(prompt)
+	for i, opt := range options {
+		fmt.Printf("  %d) %s\n", i+1, opt)
 	}
-
 	var choice int
 	fmt.Print("Enter number: ")
-	if _, err := fmt.Scan(&choice); err != nil || choice < 1 || choice > len(transitions) {
-		return nil, fmt.Errorf("invalid selection")
+	if _, err := fmt.Scan(&choice); err != nil || choice < 1 || choice > len(options) {
+		return -1, fmt.Errorf("invalid selection")
 	}
-	return transitions[choice-1], nil
+	return choice - 1, nil
+}
+
+// PickTransition shows an interactive list and returns the chosen transition.
+func PickTransition(transitions []*tracker.Transition) (*tracker.Transition, error) {
+	names := make([]string, len(transitions))
+	for i, t := range transitions {
+		names[i] = t.Name
+	}
+	idx, err := pickIndex("Move to:", names)
+	if err != nil {
+		return nil, err
+	}
+	return transitions[idx], nil
+}
+
+// PickTransitionFallback is a plain-text fallback for non-interactive terminals.
+func PickTransitionFallback(transitions []*tracker.Transition) (*tracker.Transition, error) {
+	names := make([]string, len(transitions))
+	for i, t := range transitions {
+		names[i] = t.Name
+	}
+	idx, err := pickIndexFallback("Available transitions:", names)
+	if err != nil {
+		return nil, err
+	}
+	return transitions[idx], nil
+}
+
+// PickCreateDest shows an interactive list and returns the chosen create destination.
+func PickCreateDest(dests []*tracker.CreateDest) (*tracker.CreateDest, error) {
+	labels := make([]string, len(dests))
+	for i, d := range dests {
+		labels[i] = d.Label
+	}
+	idx, err := pickIndex("Create in:", labels)
+	if err != nil {
+		return nil, err
+	}
+	return dests[idx], nil
+}
+
+// PickCreateDestFallback is a plain-text fallback for non-interactive terminals.
+func PickCreateDestFallback(dests []*tracker.CreateDest) (*tracker.CreateDest, error) {
+	labels := make([]string, len(dests))
+	for i, d := range dests {
+		labels[i] = d.Label
+	}
+	idx, err := pickIndexFallback("Create in:", labels)
+	if err != nil {
+		return nil, err
+	}
+	return dests[idx], nil
 }

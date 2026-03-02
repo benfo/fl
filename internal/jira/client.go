@@ -2,34 +2,24 @@ package jira
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/benfourie/fl/internal/config"
+	"github.com/benfourie/fl/internal/tracker"
 	"github.com/go-resty/resty/v2"
 )
 
+var keyPattern = regexp.MustCompile(`[A-Z][A-Z0-9]+-\d+`)
+
 // Client is a thin wrapper around the Jira Cloud REST API v3.
+// It implements tracker.Client.
 type Client struct {
 	http  *resty.Client
 	host  string
 	email string
 }
 
-// Ticket represents the fields of a Jira issue we care about.
-type Ticket struct {
-	Key     string
-	Summary string
-	Status  string
-	Type    string
-}
-
-// Transition is a Jira workflow transition.
-type Transition struct {
-	ID   string
-	Name string
-}
-
-// NewClient constructs a Client using credentials from config/keychain.
 func NewClient() (*Client, error) {
 	host := config.JiraHost()
 	if host == "" {
@@ -51,8 +41,11 @@ func NewClient() (*Client, error) {
 	return &Client{http: http, host: host, email: email}, nil
 }
 
-// GetTicket fetches a single issue by key.
-func (c *Client) GetTicket(key string) (*Ticket, error) {
+func (c *Client) KeyPattern() *regexp.Regexp {
+	return keyPattern
+}
+
+func (c *Client) GetItem(key string) (*tracker.Item, error) {
 	var result struct {
 		Key    string `json:"key"`
 		Fields struct {
@@ -76,7 +69,7 @@ func (c *Client) GetTicket(key string) (*Ticket, error) {
 		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
 	}
 
-	return &Ticket{
+	return &tracker.Item{
 		Key:     result.Key,
 		Summary: result.Fields.Summary,
 		Status:  result.Fields.Status.Name,
@@ -84,9 +77,11 @@ func (c *Client) GetTicket(key string) (*Ticket, error) {
 	}, nil
 }
 
-// MyOpenTickets returns tickets assigned to the authenticated user that are
-// in progress or to do, optionally filtered to configured projects.
-func (c *Client) MyOpenTickets() ([]*Ticket, error) {
+func (c *Client) ItemURL(key string) (string, error) {
+	return fmt.Sprintf("%s/browse/%s", strings.TrimRight(c.host, "/"), key), nil
+}
+
+func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
 	jql := buildMyTicketsJQL(config.JiraProjects())
 
 	var result struct {
@@ -119,19 +114,18 @@ func (c *Client) MyOpenTickets() ([]*Ticket, error) {
 		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
 	}
 
-	tickets := make([]*Ticket, 0, len(result.Issues))
+	items := make([]*tracker.Item, 0, len(result.Issues))
 	for _, issue := range result.Issues {
-		tickets = append(tickets, &Ticket{
+		items = append(items, &tracker.Item{
 			Key:     issue.Key,
 			Summary: issue.Fields.Summary,
 			Status:  issue.Fields.Status.Name,
 			Type:    issue.Fields.IssueType.Name,
 		})
 	}
-	return tickets, nil
+	return items, nil
 }
 
-// AddComment posts a plain-text comment to a ticket.
 func (c *Client) AddComment(key, text string) error {
 	body := map[string]any{
 		"body": map[string]any{
@@ -160,8 +154,7 @@ func (c *Client) AddComment(key, text string) error {
 	return nil
 }
 
-// GetTransitions returns the available workflow transitions for a ticket.
-func (c *Client) GetTransitions(key string) ([]*Transition, error) {
+func (c *Client) GetTransitions(key string) ([]*tracker.Transition, error) {
 	var result struct {
 		Transitions []struct {
 			ID   string `json:"id"`
@@ -179,14 +172,13 @@ func (c *Client) GetTransitions(key string) ([]*Transition, error) {
 		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
 	}
 
-	transitions := make([]*Transition, 0, len(result.Transitions))
+	transitions := make([]*tracker.Transition, 0, len(result.Transitions))
 	for _, t := range result.Transitions {
-		transitions = append(transitions, &Transition{ID: t.ID, Name: t.Name})
+		transitions = append(transitions, &tracker.Transition{ID: t.ID, Name: t.Name})
 	}
 	return transitions, nil
 }
 
-// DoTransition executes a workflow transition on a ticket.
 func (c *Client) DoTransition(key, transitionID string) error {
 	body := map[string]any{
 		"transition": map[string]string{"id": transitionID},
@@ -204,8 +196,90 @@ func (c *Client) DoTransition(key, transitionID string) error {
 	return nil
 }
 
-// buildMyTicketsJQL constructs the JQL for listing the current user's open
-// tickets. When projects is non-empty a project filter is injected.
+func (c *Client) CreateDests() ([]*tracker.CreateDest, error) {
+	projects := config.JiraProjects()
+	if len(projects) == 0 {
+		return nil, fmt.Errorf("no jira.projects configured — add project keys to ~/.fl/config.yaml or .fl.yaml")
+	}
+
+	var dests []*tracker.CreateDest
+	for _, projectKey := range projects {
+		types, err := c.projectIssueTypes(projectKey)
+		if err != nil {
+			return nil, fmt.Errorf("fetching issue types for %s: %w", projectKey, err)
+		}
+		for _, t := range types {
+			if t.Subtask {
+				continue
+			}
+			dests = append(dests, &tracker.CreateDest{
+				ID:    projectKey + "\t" + t.Name,
+				Label: projectKey + " · " + t.Name,
+			})
+		}
+	}
+	return dests, nil
+}
+
+func (c *Client) projectIssueTypes(projectKey string) ([]jiraIssueType, error) {
+	var project struct {
+		IssueTypes []jiraIssueType `json:"issueTypes"`
+	}
+	resp, err := c.http.R().
+		SetResult(&project).
+		Get(fmt.Sprintf("/rest/api/3/project/%s", projectKey))
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+	return project.IssueTypes, nil
+}
+
+type jiraIssueType struct {
+	Name    string `json:"name"`
+	Subtask bool   `json:"subtask"`
+}
+
+func (c *Client) CreateItem(destID, summary string) (*tracker.Item, error) {
+	// destID is "<projectKey>\t<issueTypeName>"
+	parts := strings.SplitN(destID, "\t", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid create destination: %s", destID)
+	}
+	projectKey, typeName := parts[0], parts[1]
+
+	body := map[string]any{
+		"fields": map[string]any{
+			"project":   map[string]string{"key": projectKey},
+			"issuetype": map[string]string{"name": typeName},
+			"summary":   summary,
+		},
+	}
+
+	var result struct {
+		Key string `json:"key"`
+	}
+	resp, err := c.http.R().
+		SetBody(body).
+		SetResult(&result).
+		Post("/rest/api/3/issue")
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	return &tracker.Item{
+		Key:     result.Key,
+		Summary: summary,
+		Type:    typeName,
+		Status:  "To Do",
+	}, nil
+}
+
 func buildMyTicketsJQL(projects []string) string {
 	base := `assignee = currentUser() AND statusCategory in ("In Progress", "To Do")`
 
@@ -218,13 +292,4 @@ func buildMyTicketsJQL(projects []string) string {
 	}
 
 	return base + ` ORDER BY updated DESC`
-}
-
-// TicketURL returns the browser URL for a given ticket key.
-func TicketURL(key string) (string, error) {
-	host := config.JiraHost()
-	if host == "" {
-		return "", fmt.Errorf("jira host not configured — run: fl auth jira")
-	}
-	return fmt.Sprintf("%s/browse/%s", strings.TrimRight(host, "/"), key), nil
 }

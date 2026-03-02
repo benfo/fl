@@ -5,17 +5,18 @@ import (
 
 	"github.com/benfourie/fl/internal/browser"
 	"github.com/benfourie/fl/internal/git"
+	"github.com/benfourie/fl/internal/tracker"
 )
 
-// resolveTicketKey returns the ticket key from args or infers it from the
-// current git branch when no args are provided.
-func resolveTicketKey(args []string) (string, error) {
+// resolveTicketKey returns the item key from args, or infers it from the
+// current git branch using the tracker client's key pattern.
+func resolveTicketKey(args []string, client tracker.Client) (string, error) {
 	if len(args) == 1 {
 		return args[0], nil
 	}
-	key, err := git.TicketKeyFromBranch()
+	key, err := git.TicketKeyFromBranch(client.KeyPattern())
 	if err != nil {
-		return "", fmt.Errorf("no ticket key provided and could not infer from branch: %w", err)
+		return "", fmt.Errorf("no key provided and could not infer from branch: %w", err)
 	}
 	return key, nil
 }

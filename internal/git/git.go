@@ -9,28 +9,31 @@ import (
 	"text/template"
 
 	"github.com/benfourie/fl/internal/config"
-	"github.com/benfourie/fl/internal/jira"
+	"github.com/benfourie/fl/internal/tracker"
 )
 
-// ticketKeyPattern matches Jira-style keys like PROJ-123 anywhere in a string.
-var ticketKeyPattern = regexp.MustCompile(`[A-Z][A-Z0-9]+-\d+`)
-
-// TicketKeyFromBranch reads the current git branch and extracts a Jira ticket key.
-func TicketKeyFromBranch() (string, error) {
+// TicketKeyFromBranch reads the current git branch and extracts an item key
+// using the regex supplied by the active tracker client.
+// It tries the branch as-is first (handles Trello shortLinks), then uppercased
+// (handles Jira-style keys like proj-123 written in lowercase).
+func TicketKeyFromBranch(pattern *regexp.Regexp) (string, error) {
 	branch, err := currentBranch()
 	if err != nil {
 		return "", err
 	}
 
-	key := ticketKeyPattern.FindString(strings.ToUpper(branch))
-	if key == "" {
-		return "", fmt.Errorf("no Jira ticket key found in branch %q", branch)
+	if key := pattern.FindString(branch); key != "" {
+		return key, nil
 	}
-	return key, nil
+	if key := pattern.FindString(strings.ToUpper(branch)); key != "" {
+		return key, nil
+	}
+
+	return "", fmt.Errorf("no tracker key found in branch %q", branch)
 }
 
-// BranchName renders the configured branch name template for a given ticket.
-func BranchName(ticket *jira.Ticket) (string, error) {
+// BranchName renders the configured branch name template for a given item.
+func BranchName(item *tracker.Item) (string, error) {
 	tmplStr := config.BranchTemplate()
 
 	tmpl, err := template.New("branch").Parse(tmplStr)
@@ -43,9 +46,9 @@ func BranchName(ticket *jira.Ticket) (string, error) {
 		Title string
 		Type  string
 	}{
-		Key:   ticket.Key,
-		Title: slugify(ticket.Summary),
-		Type:  issueTypeSlug(ticket.Type),
+		Key:   item.Key,
+		Title: slugify(item.Summary),
+		Type:  issueTypeSlug(item.Type),
 	}
 
 	var buf bytes.Buffer
@@ -65,7 +68,6 @@ func CreateBranch(name string) error {
 	return nil
 }
 
-// currentBranch returns the name of the current git branch.
 func currentBranch() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
@@ -74,14 +76,12 @@ func currentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// slugify converts a string to a lowercase, hyphen-separated slug.
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	s = nonAlphanumeric.ReplaceAllString(s, "-")
 	s = strings.Trim(s, "-")
-	// Truncate to keep branch names reasonable.
 	if len(s) > 50 {
 		s = s[:50]
 		s = strings.TrimRight(s, "-")
@@ -89,7 +89,6 @@ func slugify(s string) string {
 	return s
 }
 
-// issueTypeSlug maps Jira issue type names to short branch prefixes.
 func issueTypeSlug(issueType string) string {
 	switch strings.ToLower(issueType) {
 	case "bug":

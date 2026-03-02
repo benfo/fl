@@ -4,40 +4,40 @@ import (
 	"fmt"
 
 	"github.com/benfourie/fl/internal/git"
-	"github.com/benfourie/fl/internal/jira"
 	"github.com/spf13/cobra"
 )
 
 var branchCmd = &cobra.Command{
-	Use:   "branch [ticket-key]",
-	Short: "Create a git branch from a Jira ticket",
-	Long: `Fetches the Jira ticket and creates a local git branch.
+	Use:   "branch [item-key]",
+	Short: "Create a git branch from a tracker item",
+	Long: `Fetches the item and creates a local git branch.
 The branch name is derived from your configured template.
 
 Examples:
   fl branch PROJ-123
-  fl branch          # prompts for ticket key`,
+  fl branch abc12345   # Trello shortLink
+  fl branch            # infers key from current branch`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runBranch,
 }
 
 func runBranch(cmd *cobra.Command, args []string) error {
-	key, err := resolveTicketKey(args)
+	client, err := newTrackerClient()
 	if err != nil {
 		return err
 	}
 
-	client, err := jira.NewClient()
+	key, err := resolveTicketKey(args, client)
 	if err != nil {
-		return fmt.Errorf("jira: %w", err)
+		return err
 	}
 
-	ticket, err := client.GetTicket(key)
+	item, err := client.GetItem(key)
 	if err != nil {
-		return fmt.Errorf("fetching ticket %s: %w", key, err)
+		return fmt.Errorf("fetching item %s: %w", key, err)
 	}
 
-	branchName, err := git.BranchName(ticket)
+	branchName, err := git.BranchName(item)
 	if err != nil {
 		return fmt.Errorf("building branch name: %w", err)
 	}

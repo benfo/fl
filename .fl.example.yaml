@@ -1,0 +1,27 @@
+# .fl.yaml — repo-level fl config
+#
+# Place this file at the root of a git repository. fl will automatically
+# merge it on top of your global ~/.fl/config.yaml when run inside that repo.
+#
+# Credentials (API tokens, OAuth tokens) always come from the global config
+# and the OS keychain — never put secrets here.
+#
+# This file is safe to commit so the whole team shares the same setup.
+
+# Override the tracker backend for this repo.
+tracker:
+  provider: trello   # or: jira
+
+  # Trello: restrict fl today to specific boards in this repo's context.
+  # trello:
+  #   board_ids:
+  #     - <boardId>
+
+# Override the Jira project filter for this repo.
+# jira:
+#   projects:
+#     - PROJ
+
+# Override the branch naming template for this repo.
+# branch:
+#   template: "{{.Type}}/{{.Key}}-{{.Title}}"

@@ -140,10 +140,16 @@ func mapEvent(e gocal.Event, feedName string) *Event {
 		return nil
 	}
 
-	start := *e.Start
+	// gocal returns VALUE=DATE (all-day) events as midnight UTC with no time
+	// component. Detect this before converting to local time.
+	allDay := isAllDay(*e.Start)
+
+	// Convert to local time so display is always in the user's timezone,
+	// regardless of whether the feed used UTC, a TZID, or floating times.
+	start := e.Start.In(time.Local)
 	end := start.Add(time.Hour)
 	if e.End != nil {
-		end = *e.End
+		end = e.End.In(time.Local)
 	}
 
 	title := e.Summary
@@ -155,7 +161,15 @@ func mapEvent(e gocal.Event, feedName string) *Event {
 		Title:    title,
 		Start:    start,
 		End:      end,
+		AllDay:   allDay,
 		Location: e.Location,
 		Provider: feedName,
 	}
+}
+
+// isAllDay reports whether t looks like a VALUE=DATE event.
+// gocal parses DATE-only values as midnight UTC with no offset.
+func isAllDay(t time.Time) bool {
+	return t.Location() == time.UTC &&
+		t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0
 }
