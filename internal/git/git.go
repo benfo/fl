@@ -33,6 +33,12 @@ func TicketKeyFromBranch(pattern *regexp.Regexp) (string, error) {
 	return "", fmt.Errorf("no tracker key found in branch %q", branch)
 }
 
+// maxBranchLen is the maximum length for a generated branch name.
+// Keeps names readable in terminals and CI logs, and well clear of
+// filesystem path-length limits (the Windows 260-char MAX_PATH limit is
+// easily hit once git adds its refs/remotes/origin/ prefix).
+const maxBranchLen = 72
+
 // BranchName renders the configured branch name template for a given item.
 func BranchName(item *tracker.Item) (string, error) {
 	tmplStr := config.BranchTemplate()
@@ -56,7 +62,12 @@ func BranchName(item *tracker.Item) (string, error) {
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+
+	name := buf.String()
+	if len(name) > maxBranchLen {
+		name = strings.TrimRight(name[:maxBranchLen], "-/")
+	}
+	return name, nil
 }
 
 // CreateBranch creates and checks out a new local git branch.

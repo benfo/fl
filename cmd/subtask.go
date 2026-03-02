@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/benfo/fl/internal/git"
 	"github.com/spf13/cobra"
 )
+
+var subtaskAssignMe bool
 
 var subtaskCmd = &cobra.Command{
 	Use:   "subtask [key] <summary>",
@@ -21,9 +24,14 @@ The item key is inferred from the current git branch when omitted.
 
 Examples:
   fl subtask "write unit tests"
+  fl subtask "write unit tests" --assign
   fl subtask PROJ-123 "write unit tests"`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runSubtask,
+}
+
+func init() {
+	subtaskCmd.Flags().BoolVarP(&subtaskAssignMe, "assign", "a", false, "Assign the new subtask to yourself (Jira only)")
 }
 
 func runSubtask(cmd *cobra.Command, args []string) error {
@@ -59,6 +67,13 @@ func runSubtask(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Created subtask %s on %s: %s\n", item.Key, key, item.Summary)
 		if url, err := client.ItemURL(item.Key); err == nil {
 			fmt.Println(" ", url)
+		}
+		if subtaskAssignMe {
+			if err := client.AssignToMe(item.Key); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not assign subtask: %v\n", err)
+			} else {
+				fmt.Println("Assigned to you.")
+			}
 		}
 	} else {
 		// Trello: added as a checklist item on the same card.

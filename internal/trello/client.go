@@ -256,6 +256,34 @@ func (c *Client) boardLists(boardID string) ([]*tracker.Transition, error) {
 	return transitions, nil
 }
 
+func (c *Client) AssignToMe(cardKey string) error {
+	// Get the current member's ID.
+	var me struct {
+		ID string `json:"id"`
+	}
+	resp, err := c.http.R().
+		SetResult(&me).
+		SetQueryParam("fields", "id").
+		Get("/members/me")
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	resp, err = c.http.R().
+		SetQueryParam("idMembers", me.ID).
+		Put(fmt.Sprintf("/cards/%s", cardKey))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("trello API %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
 func (c *Client) AddSubtask(cardKey, summary string) (*tracker.Item, error) {
 	// Get existing checklists on the card.
 	var checklists []struct {

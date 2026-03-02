@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var createAssignMe bool
+
 var createCmd = &cobra.Command{
 	Use:   "create [summary]",
 	Short: "Create a new item in the current tracker",
@@ -20,6 +22,10 @@ When multiple destinations are available (e.g. multiple projects or
 board lists) an interactive picker is shown.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runCreate,
+}
+
+func init() {
+	createCmd.Flags().BoolVarP(&createAssignMe, "assign", "a", false, "Assign the new item to yourself")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -72,6 +78,14 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Created %s: %s\n", item.Key, item.Summary)
 	if url, err := client.ItemURL(item.Key); err == nil {
 		fmt.Println(url)
+	}
+
+	if createAssignMe {
+		if err := client.AssignToMe(item.Key); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not assign item: %v\n", err)
+		} else {
+			fmt.Println("Assigned to you.")
+		}
 	}
 	return nil
 }

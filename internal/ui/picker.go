@@ -135,6 +135,32 @@ func PickTransitionFallback(transitions []*tracker.Transition) (*tracker.Transit
 	return transitions[idx], nil
 }
 
+// PickItem shows an interactive list of tracker items and returns the chosen one.
+func PickItem(items []*tracker.Item) (*tracker.Item, error) {
+	labels := make([]string, len(items))
+	for i, item := range items {
+		labels[i] = fmt.Sprintf("%-12s %s", item.Key, item.Summary)
+	}
+	idx, err := pickIndex("Select an item:", labels)
+	if err != nil {
+		return nil, err
+	}
+	return items[idx], nil
+}
+
+// PickItemFallback is a plain-text fallback for non-interactive terminals.
+func PickItemFallback(items []*tracker.Item) (*tracker.Item, error) {
+	labels := make([]string, len(items))
+	for i, item := range items {
+		labels[i] = fmt.Sprintf("%-12s %s", item.Key, item.Summary)
+	}
+	idx, err := pickIndexFallback("Select an item:", labels)
+	if err != nil {
+		return nil, err
+	}
+	return items[idx], nil
+}
+
 // PickCreateDest shows an interactive list and returns the chosen create destination.
 func PickCreateDest(dests []*tracker.CreateDest) (*tracker.CreateDest, error) {
 	labels := make([]string, len(dests))

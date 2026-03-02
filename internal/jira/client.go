@@ -280,6 +280,33 @@ func (c *Client) CreateItem(destID, summary string) (*tracker.Item, error) {
 	}, nil
 }
 
+func (c *Client) AssignToMe(key string) error {
+	// Fetch the current user's account ID.
+	var myself struct {
+		AccountID string `json:"accountId"`
+	}
+	resp, err := c.http.R().
+		SetResult(&myself).
+		Get("/rest/api/3/myself")
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	resp, err = c.http.R().
+		SetBody(map[string]string{"accountId": myself.AccountID}).
+		Put(fmt.Sprintf("/rest/api/3/issue/%s/assignee", key))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
 func (c *Client) AddSubtask(parentKey, summary string) (*tracker.Item, error) {
 	// Derive project key from issue key, e.g. "PROJ-123" → "PROJ".
 	projectKey := strings.SplitN(parentKey, "-", 2)[0]
