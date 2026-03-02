@@ -284,7 +284,7 @@ func (c *Client) AssignToMe(cardKey string) error {
 	return nil
 }
 
-func (c *Client) AddSubtask(cardKey, summary string) (*tracker.Item, error) {
+func (c *Client) AddSubtask(cardKey, summary, _ string) (*tracker.Item, error) {
 	// Get existing checklists on the card.
 	var checklists []struct {
 		ID string `json:"id"`
@@ -394,17 +394,21 @@ func (c *Client) CreateDests() ([]*tracker.CreateDest, error) {
 	return dests, nil
 }
 
-func (c *Client) CreateItem(destID, summary string) (*tracker.Item, error) {
+func (c *Client) CreateItem(destID, summary, description string) (*tracker.Item, error) {
 	// destID is the Trello list ID.
 	var card struct {
 		ShortLink string `json:"shortLink"`
 	}
+	body := map[string]string{
+		"name":   summary,
+		"idList": destID,
+	}
+	if description != "" {
+		body["desc"] = description
+	}
 	resp, err := c.http.R().
 		SetResult(&card).
-		SetBody(map[string]string{
-			"name":   summary,
-			"idList": destID,
-		}).
+		SetBody(body).
 		SetHeader("Content-Type", "application/json").
 		Post("/cards")
 	if err != nil {

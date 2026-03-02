@@ -1,6 +1,22 @@
 package tracker
 
-import "regexp"
+import (
+	"fmt"
+	"regexp"
+)
+
+// ErrIsSubtask is returned by AddSubtask when the target item is itself a
+// subtask and therefore cannot have children. It carries the parent's key and
+// summary so the caller can offer to redirect the operation.
+type ErrIsSubtask struct {
+	Key           string // the subtask the user originally targeted
+	ParentKey     string
+	ParentSummary string
+}
+
+func (e *ErrIsSubtask) Error() string {
+	return fmt.Sprintf("%s is a subtask; subtasks cannot have children", e.Key)
+}
 
 // Item is a generic work item (Jira issue, Trello card, etc.).
 type Item struct {
@@ -33,15 +49,17 @@ type Client interface {
 	MyOpenItems() ([]*Item, error)
 	// CreateDests returns the available destinations for item creation.
 	CreateDests() ([]*CreateDest, error)
-	// CreateItem creates a new item at dest with the given summary and returns it.
-	CreateItem(destID, summary string) (*Item, error)
+	// CreateItem creates a new item at dest with the given summary and optional
+	// description. Pass an empty string for description to omit it.
+	CreateItem(destID, summary, description string) (*Item, error)
 	// AssignToMe assigns the given item to the authenticated user.
 	AssignToMe(key string) error
-	// AddSubtask adds a subtask to the given item.
-	// For Jira this creates a child issue; for Trello it adds a checklist item.
+	// AddSubtask adds a subtask to the given item with an optional description.
+	// For Jira this creates a child issue; for Trello it adds a checklist item
+	// (description is ignored for checklist items).
 	// Returns the created item. When the provider uses checklist items rather
 	// than independent issues (Trello), item.Key equals parentKey.
-	AddSubtask(parentKey, summary string) (*Item, error)
+	AddSubtask(parentKey, summary, description string) (*Item, error)
 	// KeyPattern returns a regex for extracting item keys from git branch names.
 	KeyPattern() *regexp.Regexp
 }

@@ -1,15 +1,19 @@
 package cmd
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/benfo/fl/internal/git"
+	"github.com/benfo/fl/internal/tracker"
 	"github.com/spf13/cobra"
 )
 
 var subtaskAssignMe bool
+var subtaskDescription string
 
 var subtaskCmd = &cobra.Command{
 	Use:   "subtask [key] <summary>",
@@ -32,6 +36,7 @@ Examples:
 
 func init() {
 	subtaskCmd.Flags().BoolVarP(&subtaskAssignMe, "assign", "a", false, "Assign the new subtask to yourself (Jira only)")
+	subtaskCmd.Flags().StringVarP(&subtaskDescription, "description", "d", "", "Optional description for the new subtask")
 }
 
 func runSubtask(cmd *cobra.Command, args []string) error {
@@ -57,9 +62,23 @@ func runSubtask(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("summary cannot be empty")
 	}
 
-	item, err := client.AddSubtask(key, summary)
+	item, err := client.AddSubtask(key, summary, subtaskDescription)
 	if err != nil {
-		return err
+		var isSubtask *tracker.ErrIsSubtask
+		if errors.As(err, &isSubtask) {
+			fmt.Printf("%s is a subtask.\nParent: %s — %s\n", isSubtask.Key, isSubtask.ParentKey, isSubtask.ParentSummary)
+			fmt.Printf("Create subtask on %s instead? [y/N]: ", isSubtask.ParentKey)
+			scanner := bufio.NewScanner(os.Stdin)
+			scanner.Scan()
+			if strings.ToLower(strings.TrimSpace(scanner.Text())) != "y" {
+				return fmt.Errorf("aborted")
+			}
+			key = isSubtask.ParentKey
+			item, err = client.AddSubtask(key, summary, subtaskDescription)
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	if item.Key != key {

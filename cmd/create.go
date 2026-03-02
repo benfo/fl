@@ -11,6 +11,7 @@ import (
 )
 
 var createAssignMe bool
+var createDescription string
 
 var createCmd = &cobra.Command{
 	Use:   "create [summary]",
@@ -26,6 +27,7 @@ board lists) an interactive picker is shown.`,
 
 func init() {
 	createCmd.Flags().BoolVarP(&createAssignMe, "assign", "a", false, "Assign the new item to yourself")
+	createCmd.Flags().StringVarP(&createDescription, "description", "d", "", "Optional description for the new item")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -70,7 +72,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	item, err := client.CreateItem(dest.ID, summary)
+	item, err := client.CreateItem(dest.ID, summary, createDescription)
 	if err != nil {
 		return err
 	}

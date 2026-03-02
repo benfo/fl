@@ -38,4 +38,6 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(subtaskCmd)
 	rootCmd.AddCommand(prCmd)
+	rootCmd.AddCommand(doneCmd)
+	rootCmd.AddCommand(startCmd)
 }

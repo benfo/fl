@@ -128,18 +128,7 @@ func (c *Client) MyOpenItems() ([]*tracker.Item, error) {
 
 func (c *Client) AddComment(key, text string) error {
 	body := map[string]any{
-		"body": map[string]any{
-			"type":    "doc",
-			"version": 1,
-			"content": []map[string]any{
-				{
-					"type": "paragraph",
-					"content": []map[string]any{
-						{"type": "text", "text": text},
-					},
-				},
-			},
-		},
+		"body": adfDoc(text),
 	}
 
 	resp, err := c.http.R().
@@ -242,7 +231,7 @@ type jiraIssueType struct {
 	Subtask bool   `json:"subtask"`
 }
 
-func (c *Client) CreateItem(destID, summary string) (*tracker.Item, error) {
+func (c *Client) CreateItem(destID, summary, description string) (*tracker.Item, error) {
 	// destID is "<projectKey>\t<issueTypeName>"
 	parts := strings.SplitN(destID, "\t", 2)
 	if len(parts) != 2 {
@@ -250,13 +239,16 @@ func (c *Client) CreateItem(destID, summary string) (*tracker.Item, error) {
 	}
 	projectKey, typeName := parts[0], parts[1]
 
-	body := map[string]any{
-		"fields": map[string]any{
-			"project":   map[string]string{"key": projectKey},
-			"issuetype": map[string]string{"name": typeName},
-			"summary":   summary,
-		},
+	fields := map[string]any{
+		"project":   map[string]string{"key": projectKey},
+		"issuetype": map[string]string{"name": typeName},
+		"summary":   summary,
 	}
+	if description != "" {
+		fields["description"] = adfDoc(description)
+	}
+
+	body := map[string]any{"fields": fields}
 
 	var result struct {
 		Key string `json:"key"`
@@ -307,7 +299,18 @@ func (c *Client) AssignToMe(key string) error {
 	return nil
 }
 
-func (c *Client) AddSubtask(parentKey, summary string) (*tracker.Item, error) {
+func (c *Client) AddSubtask(parentKey, summary, description string) (*tracker.Item, error) {
+	// Check whether the target issue is itself a subtask. If it is, Jira
+	// will reject the create request; we detect it early so the command can
+	// offer to redirect to the parent instead.
+	if parent, err := c.issueParent(parentKey); err == nil && parent != nil {
+		return nil, &tracker.ErrIsSubtask{
+			Key:           parentKey,
+			ParentKey:     parent.Key,
+			ParentSummary: parent.Summary,
+		}
+	}
+
 	// Derive project key from issue key, e.g. "PROJ-123" → "PROJ".
 	projectKey := strings.SplitN(parentKey, "-", 2)[0]
 
@@ -327,14 +330,17 @@ func (c *Client) AddSubtask(parentKey, summary string) (*tracker.Item, error) {
 		return nil, fmt.Errorf("project %s does not have a subtask issue type — subtasks may not be enabled", projectKey)
 	}
 
-	body := map[string]any{
-		"fields": map[string]any{
-			"project":   map[string]string{"key": projectKey},
-			"parent":    map[string]string{"key": parentKey},
-			"issuetype": map[string]string{"name": subtaskTypeName},
-			"summary":   summary,
-		},
+	fields := map[string]any{
+		"project":   map[string]string{"key": projectKey},
+		"parent":    map[string]string{"key": parentKey},
+		"issuetype": map[string]string{"name": subtaskTypeName},
+		"summary":   summary,
 	}
+	if description != "" {
+		fields["description"] = adfDoc(description)
+	}
+
+	body := map[string]any{"fields": fields}
 
 	var result struct {
 		Key string `json:"key"`
@@ -356,6 +362,61 @@ func (c *Client) AddSubtask(parentKey, summary string) (*tracker.Item, error) {
 		Type:    subtaskTypeName,
 		Status:  "To Do",
 	}, nil
+}
+
+// issueParent fetches the parent of the given issue (if any).
+// Returns nil, nil when the issue has no parent (i.e. is not a subtask).
+func (c *Client) issueParent(key string) (*tracker.Item, error) {
+	var result struct {
+		Fields struct {
+			IssueType struct {
+				Subtask bool `json:"subtask"`
+			} `json:"issuetype"`
+			Parent *struct {
+				Key    string `json:"key"`
+				Fields struct {
+					Summary string `json:"summary"`
+				} `json:"fields"`
+			} `json:"parent"`
+		} `json:"fields"`
+	}
+
+	resp, err := c.http.R().
+		SetResult(&result).
+		SetQueryParam("fields", "issuetype,parent").
+		Get(fmt.Sprintf("/rest/api/3/issue/%s", key))
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("jira API %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	if !result.Fields.IssueType.Subtask || result.Fields.Parent == nil {
+		return nil, nil
+	}
+
+	return &tracker.Item{
+		Key:     result.Fields.Parent.Key,
+		Summary: result.Fields.Parent.Fields.Summary,
+	}, nil
+}
+
+// adfDoc wraps plain text in Atlassian Document Format (ADF), which Jira
+// requires for rich-text fields like description.
+func adfDoc(text string) map[string]any {
+	return map[string]any{
+		"type":    "doc",
+		"version": 1,
+		"content": []map[string]any{
+			{
+				"type": "paragraph",
+				"content": []map[string]any{
+					{"type": "text", "text": text},
+				},
+			},
+		},
+	}
 }
 
 func buildMyTicketsJQL(projects []string) string {
