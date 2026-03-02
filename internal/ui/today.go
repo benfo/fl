@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/benfo/flow-cli/internal/calendar"
-	"github.com/benfo/flow-cli/internal/tracker"
+	"github.com/benfo/fl/internal/calendar"
+	"github.com/benfo/fl/internal/tracker"
 	"github.com/charmbracelet/lipgloss"
 )
 

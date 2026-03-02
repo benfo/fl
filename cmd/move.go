@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/benfo/flow-cli/internal/ui"
+	"github.com/benfo/fl/internal/ui"
 	"github.com/spf13/cobra"
 )
 

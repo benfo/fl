@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/benfo/flow-cli/internal/browser"
-	"github.com/benfo/flow-cli/internal/git"
-	"github.com/benfo/flow-cli/internal/tracker"
+	"github.com/benfo/fl/internal/browser"
+	"github.com/benfo/fl/internal/git"
+	"github.com/benfo/fl/internal/tracker"
 )
 
 // resolveTicketKey returns the item key from args, or infers it from the

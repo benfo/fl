@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/apognu/gocal"
-	"github.com/benfo/flow-cli/internal/config"
+	"github.com/benfo/fl/internal/config"
 )
 
 // ForceRefresh bypasses the iCal cache when set to true.

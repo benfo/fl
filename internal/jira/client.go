@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/benfo/flow-cli/internal/config"
-	"github.com/benfo/flow-cli/internal/tracker"
+	"github.com/benfo/fl/internal/config"
+	"github.com/benfo/fl/internal/tracker"
 	"github.com/go-resty/resty/v2"
 )
 

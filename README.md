@@ -5,18 +5,10 @@ A developer CLI that keeps you in the flow. Manage Jira or Trello tickets, creat
 ## Install
 
 ```bash
-go install github.com/benfo/flow-cli@latest
+go install github.com/benfo/fl@latest
 ```
 
-Requires Go 1.23+. The binary is installed as `flow-cli` — rename it if you prefer `fl`:
-
-```bash
-# macOS / Linux
-mv $(go env GOPATH)/bin/flow-cli $(go env GOPATH)/bin/fl
-
-# or add an alias to your shell profile
-alias fl='flow-cli'
-```
+Requires Go 1.23+. The binary is installed as `fl`.
 
 ## Setup
 

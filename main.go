@@ -1,6 +1,6 @@
 package main
 
-import "github.com/benfo/flow-cli/cmd"
+import "github.com/benfo/fl/cmd"
 
 func main() {
 	cmd.Execute()

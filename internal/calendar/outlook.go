@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/benfo/flow-cli/internal/browser"
-	"github.com/benfo/flow-cli/internal/config"
+	"github.com/benfo/fl/internal/browser"
+	"github.com/benfo/fl/internal/config"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/microsoft"
 )

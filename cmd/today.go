@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/benfo/flow-cli/internal/calendar"
-	"github.com/benfo/flow-cli/internal/ui"
+	"github.com/benfo/fl/internal/calendar"
+	"github.com/benfo/fl/internal/ui"
 	"github.com/spf13/cobra"
 )
 
