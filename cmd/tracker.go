@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/benfourie/fl/internal/config"
-	"github.com/benfourie/fl/internal/jira"
-	"github.com/benfourie/fl/internal/tracker"
-	"github.com/benfourie/fl/internal/trello"
+	"github.com/benfo/flow-cli/internal/config"
+	"github.com/benfo/flow-cli/internal/jira"
+	"github.com/benfo/flow-cli/internal/tracker"
+	"github.com/benfo/flow-cli/internal/trello"
 )
 
 // newTrackerClient returns the configured tracker backend.

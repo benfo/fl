@@ -1,4 +1,4 @@
-module github.com/benfourie/fl
+module github.com/benfo/flow-cli
 
 go 1.24.0
 

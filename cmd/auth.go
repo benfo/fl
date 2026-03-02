@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/benfourie/fl/internal/calendar"
-	"github.com/benfourie/fl/internal/config"
-	"github.com/benfourie/fl/internal/trello"
+	"github.com/benfo/flow-cli/internal/calendar"
+	"github.com/benfo/flow-cli/internal/config"
+	"github.com/benfo/flow-cli/internal/trello"
 	"github.com/spf13/cobra"
 )
 

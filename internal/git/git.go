@@ -8,8 +8,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/benfourie/fl/internal/config"
-	"github.com/benfourie/fl/internal/tracker"
+	"github.com/benfo/flow-cli/internal/config"
+	"github.com/benfo/flow-cli/internal/tracker"
 )
 
 // TicketKeyFromBranch reads the current git branch and extracts an item key

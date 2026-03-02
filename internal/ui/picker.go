@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/benfourie/fl/internal/tracker"
+	"github.com/benfo/flow-cli/internal/tracker"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

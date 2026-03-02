@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/benfourie/fl/internal/config"
+	"github.com/benfo/flow-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

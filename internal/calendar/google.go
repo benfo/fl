@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/benfourie/fl/internal/browser"
-	"github.com/benfourie/fl/internal/config"
+	"github.com/benfo/flow-cli/internal/browser"
+	"github.com/benfo/flow-cli/internal/config"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
